@@ -24,11 +24,11 @@
 
 ## 安装
 
-- **Kimi Code 用户**：`/plugins install <本仓库 GitHub URL>`，装完 `/reload`，
+- **Kimi Code 用户**：`/plugins install https://github.com/whz14/openathlete`，装完 `/reload`，
   随便问一句训练相关的问题，就会自动进入配置向导——选平台区服、授权、
   环境配置全部由 AI 当场代办（包括唯一依赖 [uv](https://docs.astral.sh/uv/) 的自动安装）
 - **Codex 用户**：原生插件执行
-  `codex plugin marketplace add <本仓库 GitHub URL>`，再执行
+  `codex plugin marketplace add https://github.com/whz14/openathlete`，再执行
   `codex plugin add openathlete@openathlete`；重开会话后按技能入口完成配置
 - **其他 coding agent 用户（Claude Code 等）**：clone 本仓库，
   让你的 agent 读根目录 `AGENTS.md`——包括 uv 在内的环境配置都交给它完成
