@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+        python-version:
+          - "3.10"
+          - "3.12"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check out pinned upstream test dependency
+        uses: actions/checkout@v4
+        with:
+          repository: XiaoSiHwang/garmin-sync-coros
+          ref: 06cf52ef4ec5e6bec5300b81ebd75a0be8cdb949
+          path: upstream
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Run all tests
+        run: uv run --locked --extra dev python -m pytest -q
+
+  tests:
+    name: tests
+    if: always()
+    needs:
+      - pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test matrix result
+        env:
+          PYTEST_RESULT: ${{ needs.pytest.result }}
+        run: |
+          if [ "$PYTEST_RESULT" != "success" ]; then
+            echo "Test matrix did not pass: $PYTEST_RESULT"
+            exit 1
+          fi
