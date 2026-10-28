@@ -1,0 +1,1241 @@
+{
+ "createScheduledWorkout": {
+  "type": "object",
+  "properties": {
+   "date": {
+    "type": "string",
+    "description": "Required single calendar date as an eight-digit yyyyMMdd string, for example \"20260918\". Must be a real date from today through today + 90 days, inclusive, in the user's COROS profile timezone (UTC if unavailable). Resolve relative dates such as \"tomorrow\" to that calendar date. Do not omit it or pass a blank value, a timestamp, a timezone, or a list of dates."
+   },
+   "course": {
+    "type": "object",
+    "properties": {
+     "courseDescription": {
+      "type": "string",
+      "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "courseName": {
+      "type": "string",
+      "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "dayNo": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+     },
+     "sections": {
+      "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/Section"
+      }
+     },
+     "sportType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+     },
+     "strengthBodypart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Strength training is not supported; must stay null."
+     }
+    },
+    "required": [
+     "courseDescription",
+     "courseName",
+     "sections",
+     "sportType"
+    ],
+    "description": "Required course to put on the date (sportType 1/2/5, courseName/courseDescription required, non-empty sections). For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Do not set intensityType on the course, dayNo or strengthBodypart. Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying."
+   }
+  },
+  "required": [
+   "date",
+   "course"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ },
+ "updateScheduledWorkout": {
+  "type": "object",
+  "properties": {
+   "date": {
+    "type": "string",
+    "description": "Required date of the scheduled workout as an eight-digit yyyyMMdd string, exactly as used in queryScheduledWorkoutDetails. This tool cannot move the workout to another date."
+   },
+   "idInPlan": {
+    "type": "string",
+    "description": "Required idInPlan of the standalone scheduled workout as a decimal string, taken from the createScheduledWorkout / scheduleWorkout result or queryTrainingSchedule and confirmed editable by queryScheduledWorkoutDetails; keep it as text to preserve the full 64-bit value. Do not pass a Workout ID or a Plan ID."
+   },
+   "course": {
+    "type": "object",
+    "properties": {
+     "courseDescription": {
+      "type": "string",
+      "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "courseName": {
+      "type": "string",
+      "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "dayNo": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+     },
+     "sections": {
+      "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/Section"
+      }
+     },
+     "sportType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+     },
+     "strengthBodypart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Strength training is not supported; must stay null."
+     }
+    },
+    "required": [
+     "courseDescription",
+     "courseName",
+     "sections",
+     "sportType"
+    ],
+    "description": "Required complete replacement course, same structure as createScheduledWorkout (sportType 1/2/5, courseName/courseDescription required, non-empty sections). For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Preserve each section's metric and values from queryScheduledWorkoutDetails unless the user asks to change them. Do not set intensityType on the course, dayNo or strengthBodypart. Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying."
+   }
+  },
+  "required": [
+   "date",
+   "idInPlan",
+   "course"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ },
+ "createTrainingPlan": {
+  "type": "object",
+  "properties": {
+   "planInfo": {
+    "type": "object",
+    "properties": {
+     "planName": {
+      "type": "string",
+      "description": "Required non-empty plan name in the conversation language. Maximum: 60 Chinese characters or 90 English characters. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels."
+     },
+     "planOverview": {
+      "type": "string",
+      "description": "Required non-empty plan description. Maximum: 266 Chinese characters or 800 English characters. phaseInfo.planRationale does not replace this field. Shown to the athlete as-is: plain coaching language only, no JSON field names, enum numbers or internal labels."
+     },
+     "planStartDate": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Plan start date in yyyyMMdd. Required when creating a plan: must be within [today, today+14] in the user's COROS timezone."
+     },
+     "totalWeeks": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Total plan length in natural weeks (Monday-Sunday), integer 4-16. REQUIRED when creating a plan. The plan always ends on the Sunday of week totalWeeks, so the first week may be partial when the start date is not a Monday."
+     }
+    },
+    "description": "Required plan metadata. planStartDate required in yyyyMMdd format within [today, today+14] in the user's COROS timezone; totalWeeks required integer 4-16 (natural Monday-Sunday weeks, plan ends on the Sunday of the final week); planName and planOverview both required non-empty. planName max: 60 Chinese or 90 English characters; planOverview max: 266 Chinese or 800 English characters."
+   },
+   "courseList": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "courseDescription": {
+       "type": "string",
+       "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+      },
+      "courseName": {
+       "type": "string",
+       "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+      },
+      "dayNo": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+      },
+      "sections": {
+       "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/Section"
+       }
+      },
+      "sportType": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+      },
+      "strengthBodypart": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Strength training is not supported; must stay null."
+      }
+     },
+     "required": [
+      "courseDescription",
+      "courseName",
+      "sections",
+      "sportType"
+     ]
+    },
+    "description": "Required course list (0-based, dayNo 0 = planStartDate). Multiple workouts are allowed only when explicitly requested, up to 40 per day. For the same dayNo, order is their appearance order in courseList; identical workouts remain separate courses. Split long plans by complete days; never split one day across calls. Do not combine rest entries with workouts on the same day. Valid dayNo is 0 to totalWeeks*7 - startWeekdayOffset - 1 (Monday start offset 0 .. Sunday start offset 6); the final week must contain at least one workout. sportType 1=running 2=cycling 4=rest 5=trail running; courseName and courseDescription required non-empty for every course; sport courses need non-empty sections; For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Do not set intensityType on the course. Rest courses have empty sections. Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying."
+   },
+   "phaseInfo": {
+    "type": "object",
+    "properties": {
+     "periodization": {
+      "description": "Contiguous, non-overlapping phase list anchored at planStartDate; total weeks must equal the plan weeks.",
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "durationWeeks": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase duration in whole weeks, must be greater than 0."
+        },
+        "endDate": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase end date in yyyyMMdd, aligned with startDate + durationWeeks."
+        },
+        "phaseType": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Integer phase type: 1=preparation 2=base 3=build 4=peak 5=race 6=transition."
+        },
+        "startDate": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase start date in yyyyMMdd; must equal the plan start date plus the weeks of all previous phases."
+        }
+       },
+       "required": [
+        "durationWeeks",
+        "endDate",
+        "phaseType",
+        "startDate"
+       ]
+      }
+     },
+     "planRationale": {
+      "type": "string",
+      "description": "Optional overall plan rationale. It does not replace the required planOverview when creating a plan. May be shown to the athlete: plain coaching language only, no JSON field names, enum numbers or internal labels."
+     }
+    },
+    "required": [
+     "periodization"
+    ],
+    "description": "Required phase info. periodization is a contiguous natural-week phase list {phaseType 1-6, startDate, endDate, durationWeeks}: the first phase starts on planStartDate, later phases start on a Monday, every phase ends on a Sunday; total weeks must equal planInfo.totalWeeks. planRationale optional overall reasoning."
+   }
+  },
+  "required": [
+   "planInfo",
+   "courseList",
+   "phaseInfo"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ },
+ "updateTrainingPlan": {
+  "type": "object",
+  "properties": {
+   "planInfo": {
+    "type": "object",
+    "properties": {
+     "planId": {
+      "type": "string",
+      "description": "Execution-copy plan ID as a decimal string, preserving the full 64-bit value. Required for updateTrainingPlan."
+     },
+     "planName": {
+      "type": "string",
+      "description": "Optional replacement plan name in the conversation language; omit to keep the current name. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels."
+     },
+     "planOverview": {
+      "type": "string",
+      "description": "Optional replacement plan description; omit to keep the current description. Shown to the athlete as-is: plain coaching language only, no JSON field names, enum numbers or internal labels."
+     },
+     "totalWeeks": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Optional total plan length in natural weeks (Monday-Sunday), integer 4-16. Omit to keep the current length; a smaller value shortens and a larger value extends the plan, requiring a complete matching periodization table."
+     }
+    },
+    "description": "Required. planId must come from an in-progress queryTrainingPlanLibrary row with recordRole=execution and editable=true, confirmed by queryTrainingPlanDetails; never use a library/completed/unknown/editable=false record. totalWeeks optional - omit to keep length, smaller to shorten, larger to extend (4-16, complete periodization then required); planName/planOverview optional and kept unchanged when omitted."
+   },
+   "courseList": {
+    "type": "array",
+    "items": {
+     "type": "object",
+     "properties": {
+      "courseDescription": {
+       "type": "string",
+       "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+      },
+      "courseName": {
+       "type": "string",
+       "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+      },
+      "dayNo": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+      },
+      "sections": {
+       "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/Section"
+       }
+      },
+      "sportType": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+      },
+      "strengthBodypart": {
+       "type": "integer",
+       "format": "int32",
+       "description": "Strength training is not supported; must stay null."
+      }
+     },
+     "required": [
+      "courseDescription",
+      "courseName",
+      "sections",
+      "sportType"
+     ]
+    },
+    "description": "Optional incremental course list: only the dayNo values to change; days not mentioned stay unchanged. Updating a day replaces its whole course list: if a day has workouts A/B and you submit C/D for that day, only C/D remain. Multiple workouts are allowed only when explicitly requested, up to 40 per day. For the same dayNo, order is their appearance order in courseList; identical workouts remain separate courses. Send all workouts for that day in one request; never split one day across calls. A rest entry clears the whole day; multiple rest entries clear it only once. Do not combine rest entries with workouts on the same day. If any workout on a day is completed, the whole day is skipped and all its original workouts are kept; this applies to replacement and clearing, and the skipped day is reported once. courseName and courseDescription required non-empty for every entry, rest courses included. Sport courses need non-empty sections; For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Do not set intensityType on the course. Rest courses have empty sections. Omit when only changing periodization or plan length (totalWeeks). Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying."
+   },
+   "phaseInfo": {
+    "type": "object",
+    "properties": {
+     "periodization": {
+      "description": "Contiguous, non-overlapping phase list anchored at planStartDate; total weeks must equal the plan weeks.",
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "durationWeeks": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase duration in whole weeks, must be greater than 0."
+        },
+        "endDate": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase end date in yyyyMMdd, aligned with startDate + durationWeeks."
+        },
+        "phaseType": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Integer phase type: 1=preparation 2=base 3=build 4=peak 5=race 6=transition."
+        },
+        "startDate": {
+         "type": "integer",
+         "format": "int32",
+         "description": "Phase start date in yyyyMMdd; must equal the plan start date plus the weeks of all previous phases."
+        }
+       },
+       "required": [
+        "durationWeeks",
+        "endDate",
+        "phaseType",
+        "startDate"
+       ]
+      }
+     },
+     "planRationale": {
+      "type": "string",
+      "description": "Optional overall plan rationale. It does not replace the required planOverview when creating a plan. May be shown to the athlete: plain coaching language only, no JSON field names, enum numbers or internal labels."
+     }
+    },
+    "required": [
+     "periodization"
+    ],
+    "description": "Optional. When periodization is present it replaces the whole phase table; it is REQUIRED whenever totalWeeks changes (shorten AND extend) and must match the new length. Natural-week anchoring: the first phase starts on the plan start date, later phases start on a Monday, every phase ends on a Sunday; total weeks must equal the final plan length."
+   }
+  },
+  "required": [
+   "planInfo"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ },
+ "createSingleWorkout": {
+  "type": "object",
+  "properties": {
+   "course": {
+    "type": "object",
+    "properties": {
+     "courseDescription": {
+      "type": "string",
+      "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "courseName": {
+      "type": "string",
+      "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "dayNo": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+     },
+     "sections": {
+      "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/Section"
+      }
+     },
+     "sportType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+     },
+     "strengthBodypart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Strength training is not supported; must stay null."
+     }
+    },
+    "required": [
+     "courseDescription",
+     "courseName",
+     "sections",
+     "sportType"
+    ],
+    "description": "Required workout content. sportType 1=running, 2=cycling, 5=trail running; courseName and courseDescription required non-empty; non-empty sections. For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Do not set intensityType on the course, dayNo or strengthBodypart. Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying. This tool saves to the workout library only and does not schedule a date. After saving, use scheduleWorkout with the returned Workout ID only if the user asks to put it on a date."
+   }
+  },
+  "required": [
+   "course"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ },
+ "updateWorkoutDetails": {
+  "type": "object",
+  "properties": {
+   "workoutId": {
+    "type": "string",
+    "description": "Required Workout ID as a decimal string for an editable workout from queryWorkoutDetails; keep it as text to preserve the full 64-bit value."
+   },
+   "course": {
+    "type": "object",
+    "properties": {
+     "courseDescription": {
+      "type": "string",
+      "description": "Course description in the conversation language; required non-empty for every course. Shown to the athlete as-is: describe what to do and why in plain coaching language, never JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "courseName": {
+      "type": "string",
+      "description": "Course name in the conversation language; required non-empty and at most 100 characters for every course. Shown to the athlete as-is: plain language only, no JSON field names, enum numbers or internal labels (sport terms like Zone 2, FTP, LTHR are fine)."
+     },
+     "dayNo": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Integer day offset from planStartDate, starting at 0; the same dayNo may repeat (up to 40 workouts per day) only when the user asked for more than one session that day, in appearance order in courseList; updates must submit the whole day in one request; never set it for workout library courses."
+     },
+     "sections": {
+      "description": "Section list: required non-empty for sport courses, empty array for rest courses.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/Section"
+      }
+     },
+     "sportType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Sport type: 1=running 2=cycling 4=rest (training plans only) 5=trail running."
+     },
+     "strengthBodypart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Strength training is not supported; must stay null."
+     }
+    },
+    "required": [
+     "courseDescription",
+     "courseName",
+     "sections",
+     "sportType"
+    ],
+    "description": "Required complete replacement course, same structure as createSingleWorkout (sportType 1/2/5, courseName/courseDescription required, non-empty sections). For a section with an intensity target, set its own intensityType paired with exactly one intensity format. Leave intensityType and all intensity format fields absent only when the user explicitly asks for no intensity target; do not use this to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Different sections may use different metrics; interval-group containers omit intensityType and all target/intensity fields. Preserve each section's metric and values from queryWorkoutDetails unless the user asks to change them. Do not set intensityType on the course, dayNo or strengthBodypart. Always provide targetType on plain sections, including sets members. Use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue. Free mode does not mean unset intensity; keep applying the intensity rules. Preserve existing free mode and its intensity when copying."
+   }
+  },
+  "required": [
+   "workoutId",
+   "course"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+   "Section": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "sets": {
+      "description": "Sections repeated inside the interval group: plain sections with sectionType 2 or 3 only; interval groups cannot nest. Each member uses the same section fields. A member with an intensity target declares its own intensityType paired with exactly one intensity format; members may use different metrics. Omit a member's intensityType and all intensity format fields together to leave it without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying. Member sections may use targetType 4 (free mode) only when the user explicitly asks for an open-ended section; omit targetValue and still follow the intensity rules. Free mode does not change the sectionType 2/3 restriction. Preserve existing free mode and its intensity when copying.",
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/PlainSection"
+      }
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   },
+   "PlainSection": {
+    "type": "object",
+    "properties": {
+     "intensityPercentEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range upper bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentStart; must be greater than intensityPercentStart. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityPercentStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Percent of the COROS threshold for this section's intensityType (LTHR / threshold pace / effort threshold pace), never of max heart rate. Percent range lower bound, integer percent; bounds by this section's intensityType: 1 (LTHR) 20 <= start < end <= 120, 2 or 3 (threshold pace / effort threshold pace) 20 <= start < end <= 140. Pair with intensityPercentEnd. Use only for percent-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Never allowed for power sections (intensityType 4) in any sport, and never used for bpm, pace or watts values - those go to intensityValueStart/intensityValueEnd. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Metric for this plain section, sets members included: 1=heart rate, 2=pace, 3=% effort threshold pace, 4=power. If intensityType is present, exactly one format is required. Different sections of one course may use different metrics. Running allows 1/2/4, cycling 1/4, trail running 1/2/3/4. For trail running, intensityType 2 is measured ground pace without grade adjustment; all three formats are supported. IntensityType 3 is %等强阈值配速 (% effort threshold pace, grade-adjusted); zones or percent ranges only, never absolute ranges. Both use lactate threshold pace for zones and percentages. 等强配速 / Effort Pace as absolute pace is a different intensity type that MCP does not support: if asked by name alone or in seconds/km, do not call, do not pick a zone and never convert to 2; reply that MCP does not support this intensity type and only %等强阈值配速 zones/percent ranges (3) can be set. Use 3 when explicitly asked for 等强阈值配速 / % effort threshold pace, or for 等强配速 / Effort Pace with an explicit zone or percent range; say it is saved as %等强阈值配速. Default to 2 otherwise. State the chosen metric and format in courseDescription. Pace values use seconds per kilometer (6:00/km = 360); absolute pace is intensityType 2 only. At most one intensity format, paired with this section's own intensityType: sectionIntensity (zone), intensityPercentStart/intensityPercentEnd (percent range), or intensityValueStart/intensityValueEnd (absolute range). Omit intensityType and all intensity format fields together to leave this section without an intensity target; do this only when the user explicitly asks, never to avoid choosing an appropriate zone or range. Preserve existing unset intensity when copying unless the user asks to change it. Intensity fields require this section's own intensityType; there is no course-level default. Running and trail running power accepts only absolute ranges in watts; cycling power allows FTP zones or watts, never percent ranges. For units and bounds see intensityValueStart. Omit on interval-group containers."
+     },
+     "intensityValueEnd": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Other absolute range endpoint, only for intensityType 1/2/4 (heart rate / measured ground pace / power), never 3 (% effort threshold pace). Paired with intensityValueStart and this section's own intensityType; units, bounds and all rules are the same as intensityValueStart. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intensityValueStart": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Absolute range endpoint, integer in physical units. By this section's own intensityType: 1=heart rate, 30-240 bpm inclusive; 2=measured ground pace without grade adjustment, 120-1499 integer seconds per kilometer inclusive; 3=% effort threshold pace has no absolute form and COROS 等强配速 / Effort Pace in seconds per kilometer is not supported - use zones or percent ranges; 4=power, 10-2000 W inclusive for running, cycling and trail running. Pace is total seconds per kilometer; a smaller value is a faster pace. Convert mile pace to seconds per kilometer before calling, rounding to the nearest integer (4:30/km = 270; 6:30 per mile = 242 seconds per kilometer). Both endpoints are required together. Use only for absolute-range intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Either order is accepted; equal values are allowed. For a single value, set both endpoints to that value; do not widen it into a range. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "intervalGroup": {
+      "type": "boolean",
+      "description": "Set true to make this entry an interval group that carries repeats and sets; omit for plain sections. The group container must omit intensityType, targetType, targetValue and all intensity format fields; set these on its plain member sections."
+     },
+     "repeats": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Interval repeat count in [1, 20]. Interval groups only."
+     },
+     "sectionIntensity": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Intensity zone 1-6 (cycling power sections, intensityType 4: FTP zone 1-7). Not allowed for running or trail running power sections - use intensityValueStart/intensityValueEnd in watts there. Use only for zone intensity, paired with this section's own intensityType; omit this field when using the other formats. See intensityType for unset-intensity rules. Plain sections only (sets included); omit on interval-group containers."
+     },
+     "sectionType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Section type: 1=warmup 2=training 3=recovery 4=cooldown. Required for plain sections; inside interval-group sets only 2 and 3 are allowed."
+     },
+     "targetType": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Target type: 1=distance (meters), 2=time (seconds), 3=climb (meters), 4=free mode (no target; omit targetValue). Running and cycling allow 1/2/4; trail running allows 1/3/4. Cycling does not support climb targets. Always provide targetType for each plain section, including sets members; omission does not mean free mode. Free mode has no preset distance/time/climb endpoint: the athlete ends the section with the lap button. Use it only when the user explicitly asks for an open-ended section. Free mode does not mean unset intensity; intensity rules still apply. Omit on interval-group containers."
+     },
+     "targetValue": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Positive integer target value for targetType 1/2/3; unit decided by targetType. Required for those preset targets. Omit for targetType 4 (free mode); null or 0 is also accepted, any non-zero value is invalid. Plain sections only (sets included); omit on interval-group containers."
+     }
+    }
+   }
+  }
+ }
+}

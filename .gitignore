@@ -1,0 +1,24 @@
+# 凭据与本地数据，绝不提交
+.env
+data/
+.venv/
+__pycache__/
+# 本地私有状态（含个人账号/训练信息）
+STATUS.local.md
+# 上游代码无 LICENSE，不可再分发；使用时自行 clone（见 AGENTS.md 运行手册）
+upstream/
+# 本机 MCP 配置（含本机绝对路径）；对外示例请另建 .kimi-code/mcp.json.example
+.kimi-code/
+# 本地 scratch 记录（事件存档、临时分析），不入库
+tmp/
+# Python 构建、测试与覆盖率产物
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+# 上游升级时生成的本机备份
+upstream.bak.*/
+# 探针原始响应可能含个人健康数据，只保留在本机
+dev/last_*.json
