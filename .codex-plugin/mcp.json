@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "openathlete": {
+      "command": "uv",
+      "args": ["run", "./openathlete_mcp.py"],
+      "cwd": ".",
+      "required": true,
+      "startup_timeout_sec": 120
+    },
+    "coros": {
+      "command": "uv",
+      "args": ["run", "./coros_mcp_proxy.py"],
+      "cwd": "."
+    }
+  }
+}

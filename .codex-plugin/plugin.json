@@ -1,0 +1,11 @@
+{
+  "name": "openathlete",
+  "version": "0.1.0",
+  "description": "统一佳明/高驰运动数据的 AI 训练助手：跨会话记忆、训练建议、课表写回",
+  "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "interface": {
+    "displayName": "OpenAthlete",
+    "shortDescription": "佳明/高驰运动数据统一 × AI 训练助手"
+  }
+}
