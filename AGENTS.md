@@ -55,7 +55,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
   写回复用独立 adapter，不嵌套本地代理。读时同步使用分 stream 持久队列与连续覆盖，
   记忆支持白名单 list/模板/legacy。静态声明与共享后台初始化分离，超时/失败分别返回
   `STARTING` / `STARTUP_FAILED`。真实 stdio client 验证九工具与四种本地入口，
-  本地 wheel 可离线 `uvx` 启动；259 个测试在 Python 3.12 与 3.10 均全绿，
+  本地 wheel 可离线 `uvx` 启动；所有测试在 Python 3.12 与 3.10 均全绿，
   Windows 与 WSL POSIX 文件锁分支已实测。**统一通道尚未做真实账号同步或写回验证**，
   不以 mock 替代真实账号结论。
 - **athlete.db 与 src 数据层 v0.1**：规范裸 FIT 归档入库、跑/骑结构解析、
@@ -83,6 +83,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 ├── STATUS.local.md           # 私有状态，gitignore
 ├── kimi.plugin.json          # Kimi Plugin 清单
 ├── .github/workflows/ci.yml  # 跨系统、跨 Python 版本全量测试 CI
+├── .github/workflows/release.yml # 标签触发的 PyPI Trusted Publishing
 ├── .github/pull_request_template.md # PR 验证检查清单
 ├── .agents/plugins/marketplace.json # Codex marketplace 清单
 ├── .codex-plugin/plugin.json # Codex 原生插件清单
@@ -100,6 +101,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 ├── workout_structure.py      # 兼容 shim，实现位于 src/openathlete/
 ├── migrate.py / uninstall.py # 数据移植 / 卸载清理
 ├── pyproject.toml            # src layout，包名 openathlete-mcp
+├── server.json               # 官方 MCP Registry 元数据
 ├── src/openathlete/
 │   ├── home.py / config.py   # HOME 与非密配置（含时区/同步起点/写回平台）
 │   ├── credentials.py        # 凭据读取
@@ -270,6 +272,34 @@ openathlete-mcp garmin workout schedule --id WORKOUT_ID --date YYYY-MM-DD
 
 # 测试（与 CI 相同，运行完整测试集）
 uv run --locked --extra dev python -m pytest -q
+```
+
+### PyPI 与 MCP Registry 发布
+
+发布配置不等于发布完成。首次发布前，在 PyPI 配置 pending trusted publisher：项目
+`openathlete-mcp`、仓库 `whz14/openathlete`、workflow `release.yml`、environment
+`pypi`；并在 GitHub 创建同名 environment。Pending publisher 不预留包名。
+
+每次发布先通过 PR 同步 `pyproject.toml`、`src/openathlete/__init__.py` 与
+`server.json` 的版本并全量测试。标签必须等于包版本前加 `v`；标签 workflow 校验
+版本、构建并冒烟后，才由 `pypi` environment 通过 Trusted Publishing 上传。
+必须等 PyPI 包可见后再发布同版本 MCP 元数据，不能反序。
+
+```bash
+# 本地发布检查；重新构建，不上传旧 dist
+uv run --locked --extra dev python -m pytest -q
+uv build --clear
+uvx --from dist/openathlete_mcp-X.Y.Z-py3-none-any.whl openathlete-mcp --help
+
+# main 上已通过 CI 的发布提交；X.Y.Z 替换为实际版本
+git tag -a vX.Y.Z -m vX.Y.Z
+git push origin vX.Y.Z
+
+# PyPI 页面可见后验证安装，再发布 MCP Registry
+uvx --refresh-package openathlete-mcp openathlete-mcp --help
+mcp-publisher login github
+mcp-publisher publish
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=openathlete"
 ```
 
 ## 路线图与依赖
