@@ -30,6 +30,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
+[project.urls]
+Homepage = "https://github.com/whz14/openathlete"
+Repository = "https://github.com/whz14/openathlete"
+Issues = "https://github.com/whz14/openathlete/issues"
+
 [project.scripts]
 openathlete-mcp = "openathlete.cli:main"
 

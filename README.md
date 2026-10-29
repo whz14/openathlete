@@ -1,5 +1,7 @@
 # OpenAthlete
 
+<!-- mcp-name: io.github.whz14/openathlete -->
+
 **把你的运动数据交给 AI。** 统一佳明（Garmin）与高驰（COROS）的数据能力，
 让 coding agent 成为懂你的 AI 教练：它记得你的训练史、伤病和目标赛事，
 能分析训练状态、给出建议，并把排好的课表直接写进你的手表。

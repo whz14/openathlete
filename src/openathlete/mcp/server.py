@@ -7,6 +7,7 @@ from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp_types import ListToolsResult
 
+from .. import __version__
 from ..home import athlete_db_path, openathlete_home
 from .envelope import failure
 from .schemas import TOOL_NAMES, TOOLS
@@ -75,7 +76,7 @@ def create_server(dispatch=None, startup=None):
 
     return Server(
         "openathlete",
-        version="0.1.0",
+        version=__version__,
         on_list_tools=on_list_tools,
         on_call_tool=on_call_tool,
     )
