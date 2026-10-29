@@ -79,8 +79,11 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 ./
 ├── README.md / LICENSE         # 项目说明 / MIT 许可证
 ├── AGENTS.md / DESIGN.md     # 工程说明 / 产品设计契约
+├── CONTRIBUTING.md           # 开发、测试、PR 与 main 保护规范
 ├── STATUS.local.md           # 私有状态，gitignore
 ├── kimi.plugin.json          # Kimi Plugin 清单
+├── .github/workflows/ci.yml  # 跨系统、跨 Python 版本全量测试 CI
+├── .github/pull_request_template.md # PR 验证检查清单
 ├── .agents/plugins/marketplace.json # Codex marketplace 清单
 ├── .codex-plugin/plugin.json # Codex 原生插件清单
 ├── .codex-plugin/mcp.json    # Codex 双 MCP 与 required/启动超时配置
@@ -118,8 +121,10 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 
 维护约定：
 
+- 所有变更从最新 `main` 新建分支并通过 PR 合并；禁止直推、强推或删除 `main`。
+  `CI` 的 `tests` 汇总检查必须全绿，完整流程与仓库保护规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 - 新功能优先进 `src/openathlete/`；根目录入口保持可用，逐步变薄 shim。
-- 新模块必须配必要的 pytest 测试；提交前 `uv run --with pytest pytest -q` 全绿。
+- 新模块必须配必要的 pytest 测试；提交前 `uv run --locked --extra dev python -m pytest -q` 全绿。
   解析/契约逻辑与 IO 分离，纯函数优先，阈值常量化并注明出处。
 - `.env` 与凭据文件由用户自己填写，Agent 不读取；模板见 `.env.example`。
 - `.kimi-code/mcp.json` 含本机配置，不直接提交；官方直连留档不代替当前代理方案。
@@ -263,8 +268,8 @@ openathlete-mcp garmin workout create --file WORKOUT.json --dry-run
 openathlete-mcp garmin workout create --file WORKOUT.json --date YYYY-MM-DD
 openathlete-mcp garmin workout schedule --id WORKOUT_ID --date YYYY-MM-DD
 
-# 测试
-uv run --with pytest pytest -q
+# 测试（与 CI 相同，运行完整测试集）
+uv run --locked --extra dev python -m pytest -q
 ```
 
 ## 路线图与依赖

@@ -85,6 +85,11 @@ openathlete-mcp db config set --timezone Asia/Shanghai \
 - AI 分析与每日推送会消耗你所用 coding agent 的云端模型额度
 - AI 教练不提供医疗诊断；出现严重伤病迹象请就医
 
+## 参与开发
+
+所有变更必须通过 Pull Request 合并到 `main`，并通过完整 CI 测试矩阵。
+开发环境、分支流程、测试命令与 `main` 保护规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ## 致谢
 
 - 佳明→高驰同步基于 [XiaoSiHwang/garmin-sync-coros](https://github.com/XiaoSiHwang/garmin-sync-coros)
