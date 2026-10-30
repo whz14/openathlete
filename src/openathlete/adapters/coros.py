@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from ..home import fit_dir as _fit_dir, openathlete_home
+from ..proxy_env import normalize_proxy_env
 
 # 登录统一走国区端点；响应里的 regionId 决定后续请求的区域 base（upstream 同款逻辑）
 LOGIN_URL = "https://teamcnapi.coros.com/account/login"
@@ -57,6 +58,10 @@ def archive_sport_name(sport_type) -> str:
 
 class CorosApiError(Exception):
     """高驰 API 返回非 0000 或结构异常。"""
+
+
+class ProxyConfigError(CorosApiError):
+    """HTTP 客户端无法解析进程继承的代理环境。"""
 
 
 class ArchiveConflictError(CorosApiError):
@@ -135,7 +140,11 @@ class CorosClient:
         }
 
     def _client(self) -> httpx.Client:
-        return httpx.Client(transport=self._transport, timeout=DEFAULT_TIMEOUT)
+        normalize_proxy_env()
+        try:
+            return httpx.Client(transport=self._transport, timeout=DEFAULT_TIMEOUT)
+        except httpx.InvalidURL as exc:
+            raise ProxyConfigError("HTTP 客户端无法解析代理环境配置") from exc
 
     def _get(self, path, params=None) -> dict:
         with self._client() as c:

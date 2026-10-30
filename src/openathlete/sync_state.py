@@ -18,7 +18,8 @@ import httpx
 
 from . import config as config_module
 from .adapters.coros import (
-    ArchiveConflictError, CorosApiError, CorosClient, archive_fit, unpack_fit_parts,
+    ArchiveConflictError, CorosApiError, CorosClient, ProxyConfigError,
+    archive_fit, unpack_fit_parts,
 )
 from .credentials import load_credentials
 from .db.athlete_db import (
@@ -307,6 +308,12 @@ def _as_sync_error(exc, login=False):
     if isinstance(exc, ArchiveConflictError):
         return SyncError("ARCHIVE_CONFLICT", str(exc), False,
                          "保留原 FIT，人工核查同路径冲突后再同步")
+    if isinstance(exc, ProxyConfigError):
+        return SyncError(
+            "PROXY_CONFIG_INVALID", str(exc), False,
+            "检查 MCP/CLI 进程的 HTTP_PROXY、HTTPS_PROXY、NO_PROXY；"
+            "NO_PROXY 中的 IPv6 使用 ::1 等不带方括号的地址",
+        )
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         if status == 429:
@@ -1580,13 +1587,16 @@ def backfill_activities(home, since, until, dry_run=False, limit=None, client=No
     try:
         with home_lock(home, "sync"):
             if dry_run:
-                client_obj = factory()
-                _ensure_login(client_obj)
-                activities, discovered_complete = _dry_run_activities(
-                    client_obj, config, since, until, limit)
-                return _backfill_activity_result(
-                    home, config, now_ts, since, until, len(activities), {}, True, limit,
-                    discovery_complete=discovered_complete, activities=activities)
+                try:
+                    client_obj = factory()
+                    _ensure_login(client_obj)
+                    activities, discovered_complete = _dry_run_activities(
+                        client_obj, config, since, until, limit)
+                    return _backfill_activity_result(
+                        home, config, now_ts, since, until, len(activities), {}, True, limit,
+                        discovery_complete=discovered_complete, activities=activities)
+                except Exception as exc:
+                    raise _as_sync_error(exc) from exc
             try:
                 _touch_attempt(home, ACTIVITY_STREAM, now_ts)
                 client_obj = factory()
