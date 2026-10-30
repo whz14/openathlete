@@ -225,6 +225,7 @@ Training Hub web，不受这个官方 MCP 限额约束。
 | 整会话报 400 / `$defs not found` | 宿主走了高驰官方 MCP 直连。必须改走本代理（schema 修复），检查 MCP 配置指向插件的 coros server |
 | 高驰操作中途失败 | 高驰单点登录互踢：同步/授权期间不要打开高驰 App 或网页版 |
 | 佳明登录失败 | 佳明开了两步验证（MFA），garth 不支持，需先关闭 |
+| 同步报 `PROXY_CONFIG_INVALID` | 检查 MCP/CLI 进程继承的 HTTP_PROXY、HTTPS_PROXY、NO_PROXY；NO_PROXY 的 IPv6 使用 `::1` 等裸地址。插件已在进程内兼容 `[::1]` 等带方括号的合法 IPv6，不修改系统环境，也不删除 sync.db |
 | 想看代理日志 | HOME 目录 `logs/coros-mcp-proxy.log` |
 | 想卸载插件 | Kimi：`/plugins remove openathlete` 后 `uv run <插件根目录>/uninstall.py`（数据保留）；软删加 `--purge-data`（数据挪备份）；硬删（被遗忘权）`--hard-delete`（数据/备份/token 全删，不可恢复，并按指引去佳明/高驰账号撤销授权） |
 | 换电脑迁移 | 旧机 `uv run <插件根目录>/migrate.py export` 打包数据 home；新机装好插件后 `uv run <插件根目录>/migrate.py import <包>`，token 随包恢复 |

@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from openathlete import sync_state
+from openathlete.adapters.coros import CorosClient
 from openathlete.db import athlete_db
 from openathlete.sync_state import (
     ACTIVITY_STREAM, METRICS_STREAM, SyncError, backfill_activities, backfill_metrics,
@@ -475,3 +476,49 @@ def test_invalid_timezone_is_structured_setup_error(home):
         get_coverage(home, ACTIVITY_STREAM, "2026-10-20", "2026-10-24")
     assert caught.value.code == "SETUP_REQUIRED"
     assert "IANA" in caught.value.next_action
+
+
+def test_bracketed_ipv6_no_proxy_sync_and_dry_run(home, monkeypatch):
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "localhost,127.0.0.1,::1,[::1]")
+
+    def send(_client, request, **_kwargs):
+        return httpx.Response(200, json={
+            "result": "0000", "data": {"dataList": [], "totalCount": 0},
+        }, request=request)
+
+    monkeypatch.setattr(httpx.Client, "send", send)
+    client = CorosClient("synthetic", "synthetic", home=home, timezone_name="UTC")
+    client.access_token = "synthetic"
+    result = sync_now(home, streams=(ACTIVITY_STREAM,), client=client, now_ts=NOW)
+    assert result["streams"][ACTIVITY_STREAM]["discovery_complete"] is True
+
+    dry = backfill_activities(home, "2026-10-20", "2026-10-21",
+                              dry_run=True, client=client, now_ts=NOW)
+    assert dry["dry_run"] is True and dry["discovered"] == 0
+
+
+@pytest.mark.parametrize("dry_run", [False, True], ids=["sync_now", "dry-run"])
+def test_unsupported_proxy_config_is_structured(home, monkeypatch, dry_run):
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "localhost,::1/128")
+
+    def forbidden_send(*_args, **_kwargs):
+        raise AssertionError("无效代理配置应在发送请求前失败")
+
+    monkeypatch.setattr(httpx.Client, "send", forbidden_send)
+    client = CorosClient("synthetic", "synthetic", home=home, timezone_name="UTC")
+    client.access_token = "synthetic"
+    with pytest.raises(SyncError) as caught:
+        if dry_run:
+            backfill_activities(home, "2026-10-20", "2026-10-21",
+                                dry_run=True, client=client, now_ts=NOW)
+        else:
+            sync_now(home, streams=(ACTIVITY_STREAM,), client=client, now_ts=NOW)
+    assert caught.value.code == "PROXY_CONFIG_INVALID"
+    assert "NO_PROXY" in caught.value.next_action
+    if dry_run:
+        state = db_rows(home, "select * from oa_sync_state where stream=?",
+                        (ACTIVITY_STREAM,))[0]
+        assert state["last_error_code"] is None
+        assert state["discovery_cursor_json"] is None
