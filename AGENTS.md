@@ -126,6 +126,15 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 
 - 所有变更从最新 `main` 新建分支并通过 PR 合并；禁止直推、强推或删除 `main`。
   `CI` 的 `tests` 汇总检查必须全绿，完整流程与仓库保护规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- Agent 不操作浏览器，也不通过 API 直接合并 PR；合并动作交由用户完成。
+- 有功能变化的 PR（包括 bugfix、修改 skills、新增或调整 MCP 接口）必须在同一 PR
+  同步更新 `pyproject.toml`、`src/openathlete/__init__.py` 与 `server.json` 的版本号，
+  完成紧随其后的发布前置，不能只改代码而留待以后补版本。
+- 功能变化合并后必须从最新 `main` 打对应的 `vX.Y.Z` tag 并推送，按
+  “PyPI 与 MCP Registry 发布”完成正式发布；等 PyPI 包可见并验证后，再执行
+  `mcp-publisher publish` 更新 MCP Registry，不能反序。
+- 合并后及时同步 `main` 并清理已确认合并的本地分支，保持本地整洁；仍有独立提交
+  或未确认合并的分支不得删除。
 - 新功能优先进 `src/openathlete/`；根目录入口保持可用，逐步变薄 shim。
 - 新模块必须配必要的 pytest 测试；提交前 `uv run --locked --extra dev python -m pytest -q` 全绿。
   解析/契约逻辑与 IO 分离，纯函数优先，阈值常量化并注明出处。

@@ -3,7 +3,7 @@
   "name": "io.github.whz14/openathlete",
   "title": "OpenAthlete",
   "description": "Unified Garmin and COROS training data, analysis, memory, and workout scheduling for AI agents",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/whz14/openathlete",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "openathlete-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
