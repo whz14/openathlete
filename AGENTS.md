@@ -105,6 +105,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 ├── src/openathlete/
 │   ├── home.py / config.py   # HOME 与非密配置（含时区/同步起点/写回平台）
 │   ├── credentials.py        # 凭据读取
+│   ├── proxy_env.py          # NO_PROXY 带括号 IPv6 的进程内兼容
 │   ├── structure.py          # 课型结构解析共享核心
 │   ├── workout.py            # 双平台处方、预览确认与 Garmin API 服务
 │   ├── queries.py            # canonical 活动/负荷/恢复/计划本地查询
@@ -221,6 +222,10 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
     不得用 resources/read 冒充。
 16. **Kimi 网页安装 504**：设备隧道超时后仍可能安装成功；先核对已安装列表、managed
     manifest/SKILL 与 selftest，确认未安装或版本未更新才重试，避免重复安装。
+17. **NO_PROXY 带括号 IPv6**：Clash 等代理工具常生成 `[::1]`，HTTPX 0.28 会在创建
+    默认客户端时抛出 `InvalidURL`。COROS client 在进程内将合法 `[IPv6]` 条目归一为
+    裸地址，保留用户代理配置且不修改系统环境；其他解析失败返回 `PROXY_CONFIG_INVALID`，
+    检查代理环境后恢复原 `sync_now`，不要删除 sync.db。
 
 ## 运行手册（Runbook）
 
