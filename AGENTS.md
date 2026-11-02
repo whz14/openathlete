@@ -65,7 +65,8 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
   高驰 Training Hub adapter、统一 CLI、真实全量归档与 PMC 重算已验证。
   根目录 `athlete_db.py` / `workout_structure.py` 保留为兼容 shim。
 - **佳明 adapter 只读验证**：当前阈值与日度健康/睡眠字段已真实读取成功；
-  自动定时抓取、全历史健康回填和自动锚点写入仍未产品化。
+  `garmin thresholds` 支持分运动 maxHR、最近 7 天静息心率预览与当前锚点落库。
+  自动定时抓取和全历史健康回填仍未产品化。
 - **佳明课表写回**：单段时间课、重复组距离课与指定日期排期均已真实创建并读回验证；
   `workout.py` 已沉淀统一处方→Garmin mapper 与创建/排期服务（run/ride），
   CLI 支持 dry-run；统一 `create_workout` 复用该服务，不为佳明嵌套另一个 MCP。
@@ -157,6 +158,10 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 
 - 佳明可直读跑步 LT2 心率/阈值速度、按运动类型的心率区间、骑行 FTP 和静息心率；
   跑步 LT 历史区间也可读取。阈值速度的换算为 **阈值配速 s/km = 100 / speed**。
+  这些数据经 Garmin Connect API 读取手表已同步的内容，不是蓝牙直接连表。
+  `heartRateZones.maxHeartRateUsed` 按 RUNNING/CYCLING 读取、DEFAULT 仅补缺，表示当前
+  分区采用值而非新的生理实测；静息心率用 userstats `metricId=60` 取最近 7 天最新非空值，
+  保留实际日期，空时以当日 user summary 补空。
 - 佳明没有 LT1 直接 API，需手填或估算；高驰可读取 lthr/ltsp，maxHR 缺口需手填。
 - 端点探针见 `dev/query_garmin_thresholds.py`；原始响应写入本机忽略的
   `dev/last_*.json`，不随仓库发布，也不在本文件重复维护 API 参数清单。
@@ -278,6 +283,11 @@ openathlete-mcp coros metrics --days 28
 openathlete-mcp db ingest
 openathlete-mcp db rebuild-load
 openathlete-mcp db stats
+
+# 佳明阈值：dry-run 触网只读；write 写本地锚点，默认配置时区当天生效
+openathlete-mcp garmin thresholds --dry-run
+openathlete-mcp garmin thresholds --write
+openathlete-mcp garmin thresholds --write --valid-from YYYY-MM-DD
 
 # 佳明课表（统一 workout JSON；dry-run 不触网）
 openathlete-mcp garmin workout create --file WORKOUT.json --dry-run

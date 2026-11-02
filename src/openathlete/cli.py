@@ -5,6 +5,7 @@
   openathlete-mcp coros login-check                          # 高驰 web API 登录自检
   openathlete-mcp coros pull [--since D] [--until D] [--limit N] [--dry-run]
   openathlete-mcp coros metrics [--days N | --since D --until D]
+  openathlete-mcp garmin thresholds (--dry-run | --write) [--valid-from D]
   openathlete-mcp garmin workout create --file W [--date D] [--dry-run]
   openathlete-mcp garmin workout schedule --id ID --date D
 """
@@ -134,6 +135,41 @@ def _garmin_client():
                         domain=os.environ.get("GARMIN_AUTH_DOMAIN", "COM"))
 
 
+def _garmin_thresholds(args):
+    try:
+        valid_from = _iso(_yyyymmdd(args.valid_from)) if args.valid_from \
+            else _today().isoformat()
+        client = _garmin_client()
+        client.ensure_login()
+        thresholds = client.fetch_thresholds(today=valid_from)
+        payload = {"valid_from": valid_from, "dry_run": args.dry_run,
+                   "thresholds": thresholds}
+        if not args.dry_run:
+            if not any(thresholds[sport].get(field) is not None
+                       for sport in ("run", "ride")
+                       for field in athlete_db.ANCHOR_FIELDS):
+                print("佳明未返回可写入的阈值字段，未修改锚点。")
+                return 1
+            from .home import athlete_db_path
+            conn = athlete_db.connect(athlete_db_path(OPENATHLETE_HOME))
+            try:
+                athlete_db.init_db(conn)
+                payload["written"] = {
+                    sport: athlete_db.write_anchor(
+                        conn, sport, dict(thresholds[sport], valid_from=valid_from), "garmin")
+                    for sport in ("run", "ride")
+                }
+            finally:
+                conn.close()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if not args.dry_run:
+            print("锚点已写入；已有活动需按新锚点重算时执行 db ingest --rebuild。")
+        return 0
+    except Exception as exc:  # noqa: BLE001 CLI 返回错误，不自动重试或回填
+        print("佳明阈值操作失败：{}".format(exc))
+        return 1
+
+
 def _workout_from_file(path):
     with Path(path).open("r", encoding="utf-8") as f:
         workout = json.load(f)
@@ -185,6 +221,11 @@ def _garmin_workout_schedule(args):
 def _garmin_main(argv):
     ap = argparse.ArgumentParser(prog="openathlete-mcp garmin", description="佳明数据与课表接口")
     sub = ap.add_subparsers(dest="garmin_cmd", required=True)
+    p_thresholds = sub.add_parser("thresholds", help="读取阈值、最大心率与静息心率")
+    mode = p_thresholds.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--dry-run", action="store_true", help="访问 API 并打印，不写数据库")
+    mode.add_argument("--write", action="store_true", help="写入本地 threshold_anchor")
+    p_thresholds.add_argument("--valid-from", help="生效日 YYYY-MM-DD（缺省配置时区今天）")
     p_workout = sub.add_parser("workout", help="结构化课表创建与排期")
     workout_sub = p_workout.add_subparsers(dest="workout_cmd", required=True)
     p_create = workout_sub.add_parser("create", help="按统一 JSON 创建课表")
@@ -195,6 +236,8 @@ def _garmin_main(argv):
     p_schedule.add_argument("--id", required=True, help="佳明 workoutId")
     p_schedule.add_argument("--date", required=True, help="排期日期 YYYY-MM-DD")
     args = ap.parse_args(argv)
+    if args.garmin_cmd == "thresholds":
+        return _garmin_thresholds(args)
     if args.workout_cmd == "create":
         return _garmin_workout_create(args)
     if args.workout_cmd == "schedule":

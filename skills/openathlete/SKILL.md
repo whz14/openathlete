@@ -113,8 +113,13 @@ description: OpenAthlete 训练助手的会话入口——每次会话开始执�
    双平台用户还需单独确认主表原生平台并加 `--primary-platform <coros|garmin>`；
    它只决定 canonical 选源，不决定课表写回目标。
 6. **阈值锚点（影响负荷与区间计算）**：让用户二选一——
-   - **自动读取**（推荐，需 coros 工具已上线）：经 MCP 工具
-     `queryFitnessAssessmentOverview` 读取阈值心率/配速；佳明用户后续经数据层读取；
+   - **自动读取**（推荐）：佳明用户先运行
+     `uv run --project <插件根目录> openathlete-mcp garmin thresholds --dry-run`，
+     展示读到的 LT2、阈值配速、分运动最大心率、最近静息心率及其实际日期；用户选择
+     自动读取后改为 `--write` 写入 `threshold_anchor`。dry-run 会访问 Garmin API，
+     但不写数据库。高驰用户在 coros 工具上线后经 `queryFitnessAssessmentOverview` 读取。
+     自动锚点默认从配置时区当天生效，不静默回填历史；历史用途需显式指定
+     `--valid-from YYYY-MM-DD`。缺失字段保留既有手填值。
    - **手动填写**：用户直接提供 LT1/LT2 心率、阈值配速或最近比赛成绩（用于推算）。
    结果连同日期记入 `memory/athlete.md` 的"能力基线"小节，并写入 `threshold_anchor`。
 7. **生成 `coach-user.md`**：把 `<插件根目录>/coach-user.default.md` 复制到 HOME 目录，
@@ -170,7 +175,8 @@ description: OpenAthlete 训练助手的会话入口——每次会话开始执�
 | 睡眠分期 / 更多健康字段 | 独立 COROS L2：`querySleepOverview`、`querySleepHrv`、`queryRestingHeartRate`、`queryAvgHeartRate`；统一 v0 没有的分期明确 missing，不伪造 |
 | 平台日程 | 独立 COROS L2 `queryTrainingSchedule`、`queryTrainingPlanLibrary`；统一 v0 不读取平台排期 |
 | 佳明活动 | 经既有同步进入高驰后由统一 canonical 查询；Garmin 自动活动/健康抓取仍属后续，课表 API 写回不因此受限 |
-| 只用佳明（无高驰账号） | 活动/健康结构化读取仍未产品化；记忆和 Garmin API 课表写回可用，向导第 2 步说明数据汇聚选项 |
+| 佳明阈值 | Garmin CLI `garmin thresholds`；分运动读取最大心率，静息心率取最近最新非空值 |
+| 只用佳明（无高驰账号） | 活动/健康结构化读取仍未产品化；记忆、阈值直读和 Garmin API 课表写回可用，向导第 2 步说明数据汇聚选项 |
 
 **单圈数据的陷阱**：间歇等非匀速课次的全场平均配速是
 组配速与恢复的混合（10×1.2km @3:30 + 1 分钟慢跑 → 均配 3:50，看起来像节奏跑），

@@ -229,12 +229,43 @@ class GarminClient:
 
     # -- 阈值锚点 --
 
-    def fetch_thresholds(self):
-        """阈值锚点（端点清单见 AGENTS.md"阈值锚点数据源"）。
+    def fetch_resting_hr(self, end_date=None, days=7):
+        """最近最新非空静息心率，返回 (calendarDate, value)。"""
+        if days < 1:
+            raise ValueError("days 必须是正数")
+        end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date \
+            else datetime.now().date()
+        start = end - timedelta(days=days - 1)
+        try:
+            data = self._api(
+                "/userstats-service/wellness/daily/{}".format(self.display_name()),
+                {"fromDate": start.isoformat(), "untilDate": end.isoformat(),
+                 "metricId": 60}) or {}
+        except GarminApiError:
+            data = {}
+        metrics = ((data.get("allMetrics") or {}).get("metricsMap") or {})
+        rows = metrics.get("WELLNESS_RESTING_HEART_RATE") or []
+        values = []
+        for row in rows:
+            date = str(row.get("calendarDate") or "")[:10]
+            if not date or row.get("value") is None:
+                continue
+            datetime.strptime(date, "%Y-%m-%d")
+            if start.isoformat() <= date <= end.isoformat():
+                values.append((date, row["value"]))
+        if values:
+            return max(values, key=lambda item: item[0])
+        summary = self._api(
+            "/usersummary-service/usersummary/daily/{}".format(self.display_name()),
+            {"calendarDate": end.isoformat()}) or {}
+        if summary.get("restingHeartRate") is not None:
+            return end.isoformat(), summary["restingHeartRate"]
+        return None, None
 
-        返回 {"run": {...}, "ride": {...}}，值为 threshold_anchor 列名 + valid_from；
-        拿不到的字段置 None（lt1_hr 佳明无 API，需手填或估算）。
-        """
+    def fetch_thresholds(self, today=None):
+        """阈值锚点；当前配置从 today 生效，来源日期另存为元数据。"""
+        today = today or datetime.now().strftime("%Y-%m-%d")
+        datetime.strptime(today, "%Y-%m-%d")
         out = {"run": {}, "ride": {}}
         # 跑步乳酸阈值（LT2 心率 + 阈值速度；speed 是缩放值，配速 s/km = 100/speed）
         lt_hr = lt_speed = lt_date = None
@@ -249,18 +280,15 @@ class GarminClient:
             "lt2_hr": lt_hr,
             "threshold_pace_s": round(lt_speed, 0) if lt_speed else None,
             "critical_speed_mps": round(1000.0 / lt_speed, 3) if lt_speed else None,
-            "valid_from": lt_date,
+            "lt_date": lt_date,
         })
-        # 心率区间设置：maxHR（按类型，DEFAULT 回退）与骑行 LT 心率
-        max_hr = ride_lthr = None
-        for row in self._api("/biometric-service/heartRateZones") or []:
-            if row.get("sport") == "DEFAULT":
-                max_hr = max_hr or row.get("maxHeartRateUsed")
-            elif row.get("sport") == "RUNNING":
-                max_hr = row.get("maxHeartRateUsed") or max_hr
-            elif row.get("sport") == "CYCLING":
-                ride_lthr = row.get("lactateThresholdHeartRateUsed") or None
-                max_hr = row.get("maxHeartRateUsed") or max_hr
+        zones = {row.get("sport"): row
+                 for row in self._api("/biometric-service/heartRateZones") or []}
+        default_max = (zones.get("DEFAULT") or {}).get("maxHeartRateUsed")
+        running = zones.get("RUNNING") or {}
+        cycling = zones.get("CYCLING") or {}
+        out["run"]["max_hr"] = running.get("maxHeartRateUsed") or default_max
+        out["ride"]["max_hr"] = cycling.get("maxHeartRateUsed") or default_max
         # 骑行 FTP：功率区间配置（latestFunctionalThresholdPower 常为空，作回退）
         ftp = None
         for row in self._api("/biometric-service/powerZones/sports/all") or []:
@@ -270,20 +298,16 @@ class GarminClient:
             latest = self._api(
                 "/biometric-service/biometric/latestFunctionalThresholdPower/CYCLING") or {}
             ftp = latest.get("functionalThresholdPower")
-        # 静息心率（Edwards TRIMP 必需输入）：取今日 user summary
-        resting = None
-        try:
-            summary = self._api(
-                "/usersummary-service/usersummary/daily/{}".format(self.display_name()),
-                {"calendarDate": datetime.now().strftime("%Y-%m-%d")}) or {}
-            resting = summary.get("restingHeartRate")
-        except GarminApiError:
-            pass
+        resting_date, resting = self.fetch_resting_hr(today)
         for sport in ("run", "ride"):
-            out[sport]["max_hr"] = max_hr
-            out[sport]["resting_hr"] = resting
-            out[sport]["lt1_hr"] = None  # 佳明无 LT1 API（AGENTS.md 阈值锚点数据源）
-            out[sport]["valid_from"] = out[sport].get("valid_from") or \
-                datetime.now().strftime("%Y-%m-%d")
-        out["ride"].update({"lt2_hr": ride_lthr, "ftp_w": ftp})
+            out[sport].update({
+                "resting_hr": resting,
+                "resting_hr_date": resting_date,
+                "lt1_hr": None,
+                "valid_from": today,
+            })
+        out["ride"].update({
+            "lt2_hr": cycling.get("lactateThresholdHeartRateUsed") or None,
+            "ftp_w": ftp,
+        })
         return out

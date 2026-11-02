@@ -80,3 +80,84 @@ def test_workout_create_read_and_schedule_payloads(tmp_path, monkeypatch):
     assert calls[-1] == ("POST", "/workout-service/schedule/123", {"date": "2026-10-25"}, True)
     assert client.get_scheduled_workouts(2026, 10) == {"calendarItems": []}
     assert calls[-1] == ("GET", "/calendar-service/year/2026/month/9", None)
+
+
+def test_thresholds_keep_sport_max_hr_and_use_current_valid_from(tmp_path, monkeypatch):
+    client = GarminClient("unused", "unused", home=tmp_path)
+    zones = [
+        {"sport": "CYCLING", "maxHeartRateUsed": 180,
+         "lactateThresholdHeartRateUsed": 165},
+        {"sport": "DEFAULT", "maxHeartRateUsed": 190},
+        {"sport": "RUNNING", "maxHeartRateUsed": 185},
+    ]
+
+    def api(path, params=None):
+        if path.endswith("latestLactateThreshold"):
+            return [{"hearRate": 170, "speed": 0.4, "calendarDate": "2026-10-18"}]
+        if path.endswith("heartRateZones"):
+            return zones
+        if path.endswith("powerZones/sports/all"):
+            return [{"sport": "CYCLING", "functionalThresholdPower": 200}]
+        raise AssertionError(path)
+
+    monkeypatch.setattr(client, "_api", api)
+    monkeypatch.setattr(client, "fetch_resting_hr", lambda today: ("2026-10-31", 42))
+    result = client.fetch_thresholds(today="2026-11-02")
+    assert result["run"]["max_hr"] == 185
+    assert result["ride"]["max_hr"] == 180
+    assert result["run"]["resting_hr"] == result["ride"]["resting_hr"] == 42
+    assert result["run"]["resting_hr_date"] == "2026-10-31"
+    assert result["run"]["valid_from"] == result["ride"]["valid_from"] == "2026-11-02"
+    assert result["run"]["lt_date"] == "2026-10-18"
+    assert result["run"]["threshold_pace_s"] == 250
+    assert result["ride"]["lt2_hr"] == 165 and result["ride"]["ftp_w"] == 200
+
+
+def test_thresholds_use_default_max_hr_only_for_missing_sport(tmp_path, monkeypatch):
+    client = GarminClient("unused", "unused", home=tmp_path)
+
+    def api(path, params=None):
+        if path.endswith("latestLactateThreshold"):
+            return []
+        if path.endswith("heartRateZones"):
+            return [{"sport": "DEFAULT", "maxHeartRateUsed": 190},
+                    {"sport": "RUNNING", "maxHeartRateUsed": 185}]
+        if path.endswith("powerZones/sports/all"):
+            return [{"sport": "CYCLING", "functionalThresholdPower": 200}]
+        raise AssertionError(path)
+
+    monkeypatch.setattr(client, "_api", api)
+    monkeypatch.setattr(client, "fetch_resting_hr", lambda today: (None, None))
+    result = client.fetch_thresholds(today="2026-11-02")
+    assert result["run"]["max_hr"] == 185
+    assert result["ride"]["max_hr"] == 190
+
+
+def test_resting_hr_uses_latest_nonempty_value_within_seven_days(tmp_path, monkeypatch):
+    client = GarminClient("unused", "unused", home=tmp_path)
+    monkeypatch.setattr(client, "display_name", lambda: "athlete")
+    calls = []
+
+    def api(path, params=None):
+        calls.append((path, params))
+        return {"allMetrics": {"metricsMap": {"WELLNESS_RESTING_HEART_RATE": [
+            {"calendarDate": "2026-10-28", "value": 45},
+            {"calendarDate": "2026-11-01", "value": 42},
+            {"calendarDate": "2026-11-02", "value": None},
+        ]}}}
+
+    monkeypatch.setattr(client, "_api", api)
+    assert client.fetch_resting_hr("2026-11-02") == ("2026-11-01", 42)
+    assert calls[0][1] == {"fromDate": "2026-10-27", "untilDate": "2026-11-02",
+                           "metricId": 60}
+
+
+def test_resting_hr_falls_back_to_summary_and_allows_missing(tmp_path, monkeypatch):
+    client = GarminClient("unused", "unused", home=tmp_path)
+    monkeypatch.setattr(client, "display_name", lambda: "athlete")
+    responses = iter([{}, {"restingHeartRate": 41}])
+    monkeypatch.setattr(client, "_api", lambda path, params=None: next(responses))
+    assert client.fetch_resting_hr("2026-11-02") == ("2026-11-02", 41)
+    responses = iter([{}, {}])
+    monkeypatch.setattr(client, "_api", lambda path, params=None: next(responses))
+    assert client.fetch_resting_hr("2026-11-02") == (None, None)
