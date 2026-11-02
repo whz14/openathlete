@@ -273,8 +273,9 @@ TOOLS = [
     ),
     _tool(
         "sync_now",
-        "立即对活动和日度指标各执行至多一个增量批次；长任务由调用方继续。",
-        _object(),
+        "立即对活动和日度指标各执行至多一个增量批次；活动 batch_size 可选 1..200。",
+        _object({"batch_size": {"type": "integer", "minimum": 1, "maximum": 200,
+                                "default": 20}}),
         {
             "trigger": {"type": "string"},
             "streams": {"type": "object", "additionalProperties": {"type": "object"}},

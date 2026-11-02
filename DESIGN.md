@@ -475,7 +475,8 @@ standing⇔time<45 且 dist<60、pace_min≤pace_max、group 下 cycles×len(ste
    `notifications/tools/list_changed` 当作模型目录刷新的保证。
 4. **读写分离**：写工具（课表/计划写回手表）默认要求用户确认，不静默执行。
 5. **错误即文档**：认证失效返回结构化引导（重新授权路径）；任何失败给下一步建议。
-6. **长任务分批**：大同步拆小批（约 20 条/次）+ 断点续传，返回剩余量由模型循环。
+6. **长任务分批**：默认约 20 条/次 + 断点续传，返回剩余量由模型循环；显式
+   `sync_now` 可提高到最多 200 条/次以减少往返，续跑保持同一 batch_size。
 7. **记忆读写走 MCP 工具**：`~/.openathlete/` 在宿主 workspace 之外，agent 通过
    `read_memory`/`write_memory` 访问；历史枚举用 `read_memory` 的白名单 list 模式，
    不增加任意路径读取能力。
@@ -515,8 +516,11 @@ FIT 归档在本地完成后入库；统一 MCP 工具只面向 AI 交互（查�
 `get_training_load` 只需活动，`get_recovery_status` 只需日度指标。活动发现按 COROS
 日期接口固定窗口分页，48 小时 overlap 转成天级查询后再按秒过滤；日度指标用独立的
 日期覆盖窗口，首次 28 天、后续重取最近日期，不能套用活动分页游标。multisport 队列
-按父活动计 20 条上限，下载与入库按 `parent#i` 段及段哈希幂等，全部段完成后才标 done。
+按父活动默认每批 20 条，下载与入库按 `parent#i` 段及段哈希幂等，全部段完成后才标 done。
 每次查询或 `sync_now` 对每个所需 stream 各最多处理一批，不在 server 内自动循环。
+读时同步保持默认 20；显式 `sync_now` 可传 `batch_size`（1..200）减少历史 backlog 的
+模型往返，续跑提示必须携带同一参数。大批次仍按原顺序调用 API、逐条判重与持久化，
+不改变覆盖和失败语义，也不假定非官方接口允许并发。
 首次活动范围由 `activity_since` 决定（向导建议最近 90 天）；更早活动、指标或 PMC
 初始化历史不被静默伪造成空值/零负荷，而是返回实际覆盖、`complete:false` 和显式 CLI
 回补建议，不由 MCP 暗中发起全历史下载。显式回补也复用同一持久状态机，只有整个连续
@@ -541,7 +545,7 @@ Garmin 直接复用已验证的 API mapper 与创建/排期服务，不经过任
 | `get_training_load` | days=42 | 统一本地 TRIMP+PMC 的 CTL/ATL/TSB 趋势 + 锚点/活动覆盖范围 + 人话解读；平台原生负荷仅作独立 L2 参考，不混入 |
 | `get_recovery_status` | date=今天 | 各来源睡眠 HRV、静息心率等；保留 sources，主平台只选择展示源，不平均、不伪造统一恢复评分，缺源明确标出 |
 | `get_weather_forecast` | date、location=个人资料默认 | 训练/赛事日天气（第三方 API，后续切片） |
-| `sync_now` | — | 立即增量同步；长任务分批，返回本次完成数与剩余数，由模型循环 |
+| `sync_now` | batch_size=20（1..200） | 立即增量同步；长任务分批，返回本次完成数与剩余数，由模型按同一 batch_size 循环 |
 | `get_current_plan` | date=今天 | 进行中计划 + 本周细化课表 + 平台排期状态——“今天练什么”与晨报一次拿全 |
 | `read_memory` / `write_memory` | name 或白名单 list；写入时 name/content | 读写/枚举 memory/ 下的 Markdown（含分层档案）；write 做模板与并发校验 |
 | `create_workout` / `create_training_plan` | 课程结构、目标平台、confirm_token | 首次返回预览 + token；带 token 执行写回。多周计划后续切片中，佳明降级为一组按日期排期的单次课表 |

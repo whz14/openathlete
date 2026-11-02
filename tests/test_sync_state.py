@@ -217,14 +217,35 @@ def test_twenty_parent_batch_and_ttl_backlog(home, monkeypatch):
     summary = first["streams"][ACTIVITY_STREAM]
     assert summary["processed"] == 20 and summary["queued_remaining"] == 5
     assert summary["complete"] is False and summary["stale"] is True
+    assert "sync_now(batch_size=20)" in summary["next_action"]
     assert len(client.download_calls) == 20
     meta, coverage = ensure_fresh(
         home, {ACTIVITY_STREAM: ("2026-10-20", "2026-10-24")},
         client=client, now_ts=NOW + 60)
     assert meta["attempted"] is True
     assert meta["streams"][ACTIVITY_STREAM]["processed"] == 5
+    assert meta["streams"][ACTIVITY_STREAM]["batch_limit"] == 20
     assert coverage[ACTIVITY_STREAM]["complete"] is True
     assert len(client.download_calls) == 25
+
+
+def test_custom_batch_size_finishes_backlog_in_one_call(home, monkeypatch):
+    client = fake_client(monkeypatch)
+    for index in range(25):
+        client.add("p{:02}".format(index), TS0 + index * 60)
+    result = sync_now(home, streams=(ACTIVITY_STREAM,), client=client, now_ts=NOW,
+                      batch_size=50)
+    summary = result["streams"][ACTIVITY_STREAM]
+    assert summary["processed"] == 25
+    assert summary["batch_limit"] == 50
+    assert summary["queued_remaining"] == 0
+    assert summary["complete"] is True
+    assert len(client.download_calls) == 25
+    for invalid in (0, 201, True):
+        with pytest.raises(SyncError) as caught:
+            sync_now(home, streams=(ACTIVITY_STREAM,), client=client, now_ts=NOW,
+                     batch_size=invalid)
+        assert caught.value.code == "INVALID_ARGUMENT"
 
 
 def test_two_streams_and_manual_ignores_ttl(home, monkeypatch):

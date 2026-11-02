@@ -69,6 +69,9 @@ def test_invalid_arguments_are_business_errors(tmp_path):
         ("read_memory", {"name": "athlete", "list": "plans"}),
         ("write_memory", {"name": "athlete"}),
         ("create_workout", {}),
+        ("sync_now", {"batch_size": 0}),
+        ("sync_now", {"batch_size": 201}),
+        ("sync_now", {"batch_size": True}),
     ):
         result = call(home, name, args)
         assert result.is_error is True
@@ -96,33 +99,58 @@ def test_sync_failure_returns_old_data_or_auth_error(tmp_path, monkeypatch):
 
 def test_sync_now_flattens_stream_summaries(tmp_path, monkeypatch):
     home = make_home(tmp_path)
-    monkeypatch.setattr("openathlete.sync_state.sync_now", lambda _home: {
-        "trigger": "manual",
-        "streams": {
-            "coros-activities": {
-                "batch_limit": 20, "discovered": 2, "processed": 2, "succeeded": 2,
-                "failed": 0, "queued_remaining": 1, "discovery_complete": False,
-                "high_water_ts": 100, "last_success_ts": 90,
-                "coverage": {"complete": False, "stale": True},
-                "complete": False, "stale": True, "item_errors": [],
+    seen = {}
+
+    def fake_sync_now(_home, batch_size):
+        seen["batch_size"] = batch_size
+        return {
+            "trigger": "manual",
+            "streams": {
+                "coros-activities": {
+                    "batch_limit": 100, "discovered": 2, "processed": 2, "succeeded": 2,
+                    "failed": 0, "queued_remaining": 1, "discovery_complete": False,
+                    "high_water_ts": 100, "last_success_ts": 90,
+                    "coverage": {"complete": False, "stale": True},
+                    "complete": False, "stale": True, "item_errors": [],
+                    "next_action": "再次调用 sync_now(batch_size=100)；每路每次只处理一批",
+                },
+                "coros-daily-metrics": {
+                    "discovered": 2, "processed": 2, "succeeded": 2, "failed": 0,
+                    "queued_remaining": 0, "discovery_complete": True,
+                    "high_water_ts": None, "last_success_ts": 90,
+                    "coverage": {"complete": True, "stale": False},
+                    "complete": True, "stale": False, "item_errors": [],
+                },
             },
-            "coros-daily-metrics": {
-                "discovered": 2, "processed": 2, "succeeded": 2, "failed": 0,
-                "queued_remaining": 0, "discovery_complete": True,
-                "high_water_ts": None, "last_success_ts": 90,
-                "coverage": {"complete": True, "stale": False},
-                "complete": True, "stale": False, "item_errors": [],
-            },
-        },
-        "complete": False, "stale": True, "partial": False,
-    })
-    synced = call(home, "sync_now")
+            "complete": False, "stale": True, "partial": False,
+        }
+
+    monkeypatch.setattr("openathlete.sync_state.sync_now", fake_sync_now)
+    synced = call(home, "sync_now", {"batch_size": 100})
     assert synced.is_error is False
+    assert seen["batch_size"] == 100
     data = synced.structured_content["data"]
     assert data["trigger"] == "manual"
+    assert data["batch_limit"]["coros-activities"] == 100
     assert data["processed"]["coros-activities"] == 2
     assert data["queued_remaining"] == {"coros-activities": 1, "coros-daily-metrics": 0}
-    assert data["next_action"]
+    assert "sync_now(batch_size=100)" in data["next_action"]
+    assert "sync_now(batch_size=100)" in data["streams"]["coros-activities"]["next_action"]
+
+
+def test_sync_now_defaults_batch_size_to_twenty(tmp_path, monkeypatch):
+    home = make_home(tmp_path)
+    seen = {}
+
+    def fake_sync_now(_home, batch_size):
+        seen["batch_size"] = batch_size
+        return {"trigger": "manual", "streams": {}, "complete": True,
+                "stale": False, "partial": False}
+
+    monkeypatch.setattr("openathlete.sync_state.sync_now", fake_sync_now)
+    synced = call(home, "sync_now")
+    assert synced.is_error is False
+    assert seen["batch_size"] == 20
 
 
 def test_real_empty_coverage_is_not_missing_or_insufficient(tmp_path):

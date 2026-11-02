@@ -45,7 +45,8 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
   代理修复官方写工具 schema 导致的 Moonshot API 400（见“已知坑”第 9 条）。
   首轮静态声明与后台初始化已通过 Codex 默认 optional 配置的真实 `queryDevices` 调用。
 - **v0 插件骨架**：`kimi.plugin.json`、双层教练人格、会话入口 skill；
-  入口脚本支持 PEP 723 / `uv run`，状态迁至 `~/.openathlete/` 并自动迁移旧布局。
+  bootstrap 不自动联网自检。入口脚本支持 PEP 723 / `uv run`，状态迁至
+  `~/.openathlete/` 并自动迁移旧布局。
 - **Codex 原生薄适配**：隔离环境的 marketplace/plugin 安装、skill 发现、双 MCP 注册和
   统一九工具 stdio 已验证；OpenAthlete 使用 `required=true` 与 120 秒启动超时，
   `readOnlyHint` 与真实 `read_memory` 调用也已通过。optional server 的首轮目录宽限见
@@ -53,6 +54,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 - **openathlete-mcp v0**：9 个统一工具已实现——训练看板、活动、负荷、恢复、
   手动同步、当前计划、记忆读写与单次课表；COROS 官方 MCP 与 Garmin API 双平台
   写回复用独立 adapter，不嵌套本地代理。读时同步使用分 stream 持久队列与连续覆盖，
+  手动 `sync_now` 的活动 batch_size 默认20、可配1..200，续跑提示保留参数。
   记忆支持白名单 list/模板/legacy。静态声明与共享后台初始化分离，超时/失败分别返回
   `STARTING` / `STARTUP_FAILED`。真实 stdio client 验证九工具与四种本地入口，
   本地 wheel 可离线 `uvx` 启动；所有测试在 Python 3.12 与 3.10 均全绿，
@@ -322,7 +324,8 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=openathlete"
 - **阶段二**：补齐 doctor、运行日志和排错知识，完善仓库即交付物。
 - **阶段三**：完善 Kimi Plugin 命令并发布；骨架、状态外移和 PEP 723 已完成。
 - **阶段四（本地已实现）**：stdio MCP 九工具、读时同步 TTL、分 stream 队列与连续覆盖、
-  双平台单次课表写回已落地；长任务按约 20 条分批，使用 sync.db 续传并返回剩余量。
+  双平台单次课表写回已落地；长任务默认约 20 条分批，sync_now 可配至 200，
+  使用 sync.db 续传并返回剩余量与同一 batch_size 续跑提示。
   四种本地入口与离线 wheel 已验证；PyPI 与 MCP registry 发布仍待做。
 - **阶段五**：完善训练助手、每日晨报、课表写回和可选 OpenClaw 渠道。
 

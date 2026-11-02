@@ -35,6 +35,7 @@ from .home import athlete_db_path
 from .locks import LockBusy, home_lock
 
 SYNC_BATCH_SIZE = 20
+MAX_SYNC_BATCH_SIZE = 200
 SYNC_TTL_S = 6 * 3600
 DISCOVERY_OVERLAP_S = 48 * 3600
 DISCOVERY_PAGE_SIZE = 50
@@ -1227,7 +1228,8 @@ def _activity_result(home, config, now_ts, discovered, batch, attempted, trigger
         }
         result["next_action"] = "退避到期后重试，不在 TTL 内紧密轮询"
     elif not complete:
-        result["next_action"] = "再次调用 sync_now；每路每次只处理一批"
+        result["next_action"] = "再次调用 sync_now(batch_size={})；每路每次只处理一批".format(
+            result["batch_limit"])
     else:
         result["next_action"] = ""
     return result
@@ -1273,7 +1275,8 @@ def _metrics_result(home, config, now_ts, discovered, processed, attempted, trig
     return result
 
 
-def _sync_activity_stream(home, client_factory, config, now_ts, trigger):
+def _sync_activity_stream(home, client_factory, config, now_ts, trigger,
+                          batch_size=SYNC_BATCH_SIZE):
     if _retry_backoff(home, ACTIVITY_STREAM, now_ts) is not None:
         return _activity_result(home, config, now_ts, 0, {}, False, trigger, blocked=True)
     try:
@@ -1281,7 +1284,7 @@ def _sync_activity_stream(home, client_factory, config, now_ts, trigger):
         client = client_factory()
         _ensure_login(client)
         discovered = _discover_activities(home, client, config, now_ts)
-        batch = _run_activity_batch(home, client, config, now_ts)
+        batch = _run_activity_batch(home, client, config, now_ts, limit=batch_size)
         _finish_success(home, ACTIVITY_STREAM, now_ts)
         return _activity_result(home, config, now_ts, discovered, batch, True, trigger)
     except Exception as exc:
@@ -1402,8 +1405,12 @@ def _streams(streams):
 
 
 @_translate_errors
-def sync_now(home, streams=SYNC_STREAMS, trigger="manual", client=None, now_ts=None):
+def sync_now(home, streams=SYNC_STREAMS, trigger="manual", client=None, now_ts=None,
+             batch_size=SYNC_BATCH_SIZE):
     """每个指定 stream 最多发现一次并处理一个批次，不在函数内自动循环。"""
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or not (
+            1 <= batch_size <= MAX_SYNC_BATCH_SIZE):
+        raise SyncError("INVALID_ARGUMENT", "batch_size 必须是 1..200 的整数")
     home = _home(home)
     init_sync_db(home)
     selected = _streams(streams)
@@ -1416,7 +1423,7 @@ def sync_now(home, streams=SYNC_STREAMS, trigger="manual", client=None, now_ts=N
             for stream in selected:
                 if stream == ACTIVITY_STREAM:
                     results[stream] = _sync_activity_stream(
-                        home, factory, config, now_ts, trigger)
+                        home, factory, config, now_ts, trigger, batch_size=batch_size)
                 else:
                     results[stream] = _sync_metrics_stream(
                         home, factory, config, now_ts, trigger)

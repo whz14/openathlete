@@ -16,10 +16,11 @@ description: OpenAthlete 训练助手的会话入口——每次会话开始执�
 ## 一、每次会话开始（bootstrap，必做）
 
 1. 检查 HOME 目录与 `coach-user.md` 是否存在。优先用统一 `read_memory`
-   （`name=coach-user`）判断；`exists:false` 或 HOME 不存在 → 进入第二节配置向导
+   （`name=coach-user`）读取并判断；`exists:false` 或 HOME 不存在 → 进入第二节配置向导
    （人格缺失时可跳过建目录步骤），完成后继续。统一工具未上线时可先按绝对路径检查。
+   **保留本次读取结果，后续不重复读取 coach-user。**
 2. 存在则读取**常驻层**（文件缺失时跳过该项，不报错），优先使用统一工具：
-   - `read_memory(name=coach-user)`（语气、激进度、体系词汇，全程生效）
+   - 复用第 1 步的 `coach-user` 结果（语气、激进度、体系词汇，全程生效）
    - `read_memory(name=athlete)`（画像与能力基线）
    - `read_memory(name=races)`（目标赛事与历史成绩简表）
    - `read_memory(name=injuries)`（未愈伤病与历史简表）
@@ -31,10 +32,10 @@ description: OpenAthlete 训练助手的会话入口——每次会话开始执�
    常驻文件有预算上限（各 ≤2k token），超限时按 coach-core §三当场浓缩。
 3. **月初检查**：用 list 检查上月日志与 `summary:YYYY-MM`；有日志但无月度 summary 时，
    先浓缩成月度概述（原日志保留不删），再继续。
-4. **工具缺失检查**：统一 openathlete 工具未上线时先确认插件已更新；Kimi 使用 `/reload`，
-   其他宿主按各自文档重载或新开会话。若 COROS 工具缺失，**不要重走向导**——跑
-   `uv run <插件根目录>/coros_mcp_proxy.py --selftest` 诊断：token 问题按第四节
-   排错表处理，selftest 正常则重载让工具上线。
+4. **工具缺失检查**：bootstrap 不自动运行联网自检。统一 openathlete 工具未上线时先确认
+   插件已更新；Kimi 使用 `/reload`，其他宿主按各自文档重载或新开会话。COROS 工具缺失
+   不重走向导，也不自动跑 selftest；只有用户实际请求 COROS 功能，或重载后仍缺失时才运行
+   `uv run <插件根目录>/coros_mcp_proxy.py --selftest` 做一次针对性诊断。
 5. 读完不要主动汇报全文；用户问"最近怎么样"类问题时再按 coach-core 的分析工作流取数作答。
 6. 之后全程遵守 coach-core：Kimi 已由 `systemPromptPath` 注入；其他宿主若未注入，
    先读取 `<插件根目录>/coach-core.md`。人格微调只写 `coach-user.md`，
@@ -162,7 +163,7 @@ description: OpenAthlete 训练助手的会话入口——每次会话开始执�
 | 活动列表/详情 | 统一 `query_activities`（只读 canonical）；`detail=true` 附 FIT 结构、细区间与来源 |
 | 统一 TRIMP / PMC | `get_training_load`：本地统一计算，含锚点与 PMC 初始化覆盖，不混 EvoLab |
 | 恢复 | `get_recovery_status`：按来源返回 HRV/静息心率等；没有统一恢复评分时 `recovery_pct=null` |
-| 手动同步 | `sync_now`：活动与日度指标各至多一批；按返回剩余量由模型继续，不自动循环 |
+| 手动同步 | `sync_now`：活动与日度指标各至多一批；活动 `batch_size` 默认20、可选1..200。历史大补数可用 `sync_now(batch_size=100)`，续跑沿用同一参数；API仍顺序调用 |
 | 当前计划 | `get_current_plan`：本地进行中计划与本周日志；v0 `platform_schedule.available=false` |
 | 记忆与历史 | `read_memory` / `write_memory`；历史先用 `read_memory(list=summary)`、plans/races/injuries/archive 或 `log:YYYY-MM` 定位 |
 | **课型结构/逐圈** | 先用 `query_activities(detail=true)`；需要逐圈或大范围扫描时用 `uv run <插件根目录>/fit_laps.py <日期>` 解析原始 FIT，不用平台自动圈代替 |

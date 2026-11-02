@@ -314,9 +314,10 @@ async def _overview_query(home, args):
 
 
 async def _sync_now(home, args):
-    _check_args(args, set())
+    _check_args(args, {"batch_size"})
+    batch_size = _integer(args, "batch_size", 20, 1, 200)
     from ..sync_state import sync_now
-    data = await asyncio.to_thread(sync_now, home)
+    data = await asyncio.to_thread(sync_now, home, batch_size=batch_size)
     streams = data.get("streams") or {}
     for field in ("batch_limit", "discovered", "processed", "succeeded", "failed",
                   "queued_remaining", "discovery_complete", "high_water_ts",
@@ -339,7 +340,9 @@ async def _sync_now(home, args):
     coverage.setdefault("stale", not complete)
     data["coverage"] = coverage
     if not complete and not data.get("next_action"):
-        data["next_action"] = "再次调用 sync_now，每路继续一批，直到覆盖与队列完成"
+        data["next_action"] = (
+            "再次调用 sync_now(batch_size={})，每路继续一批，直到覆盖与队列完成"
+            .format(batch_size))
     return success("sync_now", data, {
         "coverage": coverage,
         "sync": data,
