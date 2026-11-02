@@ -167,15 +167,6 @@ def _finish(tool, data, coverage, sync_meta, sync_error):
     warnings = list(coverage.pop("warnings", []))
     meta = {"coverage": coverage, "sync": sync_meta, "warnings": warnings,
             "timezone": coverage.get("timezone") or "UTC"}
-    if (tool in {"query_activities", "get_training_load", "get_overview"}
-            and coverage.get("canonical_count") == 0
-            and coverage.get("excluded_conflict_count", 0) > 0):
-        return failure(
-            tool, "CANONICAL_CONFLICT", "时间窗内的活动无法确定性选择 canonical。",
-            next_action="确认 primary_platform 并全量重建；冲突活动不会当作没有训练。",
-            details={"excluded_conflict_count": coverage["excluded_conflict_count"]},
-            meta=meta,
-        )
     if sync_error and not _has_local_data(tool, data):
         return failure(
             tool,
@@ -199,8 +190,19 @@ def _finish(tool, data, coverage, sync_meta, sync_error):
     if sync_error:
         warnings.append(_sync_error_details(sync_error))
     if coverage.get("excluded_conflict_count", 0) > 0:
-        warnings.append({"code": "CANONICAL_CONFLICT",
-                         "count": coverage["excluded_conflict_count"]})
+        coverage["partial"] = True
+        warnings.append({
+            "code": "CANONICAL_CONFLICT",
+            "message": "已排除无法确定性选源的活动；其余活动继续统计。",
+            "count": coverage["excluded_conflict_count"],
+        })
+    if coverage.get("unknown_trimp_count", 0) > 0:
+        coverage["partial"] = True
+        warnings.append({
+            "code": "TRIMP_PARTIAL",
+            "message": "部分活动缺少 TRIMP；日负荷与 PMC 仅按已知负荷继续计算。",
+            "count": coverage["unknown_trimp_count"],
+        })
     return success(tool, data, meta)
 
 

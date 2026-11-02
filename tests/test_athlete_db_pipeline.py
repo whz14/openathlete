@@ -231,10 +231,11 @@ def test_rebuild_daily_load_requires_canonical_source():
     assert row["trimp"] == 100.0
 
 
-def test_unknown_trimp_blocks_later_pmc_until_complete_rebuild():
+def test_unknown_swim_trimp_is_skipped_and_later_pmc_continues():
     conn = mem_db()
     _insert_activity(conn, TS0, 100.0)
     unknown_id = _insert_activity(conn, TS0 + 86400, None)
+    conn.execute("update activity set sport='swim' where id=?", (unknown_id,))
     _insert_activity(conn, TS0 + 2 * 86400, 200.0)
     today = (DAY0 + timedelta(days=3)).date()
 
@@ -245,11 +246,11 @@ def test_unknown_trimp_blocks_later_pmc_until_complete_rebuild():
     assert rows[0]["trimp"] == 100.0
     assert (rows[0]["ctl"], rows[0]["atl"], rows[0]["tsb"]) == (
         round(ctl, 1), round(atl, 1), round(ctl - atl, 1))
-    assert rows[1]["trimp"] is None
-    assert rows[2]["trimp"] == 200.0
-    assert rows[3]["trimp"] == 0.0
-    for row in rows[1:]:
-        assert (row["ctl"], row["atl"], row["tsb"]) == (None, None, None)
+    assert [row["trimp"] for row in rows[1:]] == [0.0, 200.0, 0.0]
+    for row in rows:
+        assert row["ctl"] is not None
+        assert row["atl"] is not None
+        assert row["tsb"] is not None
 
     conn.execute("update activity set trimp = 80 where id = ?", (unknown_id,))
     assert rebuild_daily_load(conn, today=today) == 4
@@ -261,13 +262,16 @@ def test_unknown_trimp_blocks_later_pmc_until_complete_rebuild():
         assert row["tsb"] is not None
 
 
-def test_same_day_partial_unknown_trimp_makes_daily_total_unknown():
+def test_same_day_normal_run_and_unknown_swim_use_known_total():
     conn = mem_db()
     _insert_activity(conn, TS0, 100.0)
-    _insert_activity(conn, TS0 + 60, None)
+    unknown_id = _insert_activity(conn, TS0 + 60, None)
+    conn.execute("update activity set sport='swim' where id=?", (unknown_id,))
     _insert_activity(conn, TS0 + 120, 50.0)
 
     assert rebuild_daily_load(conn, today=DAY0.date()) == 1
     row = conn.execute("select * from daily_load").fetchone()
-    assert row["trimp"] is None
-    assert (row["ctl"], row["atl"], row["tsb"]) == (None, None, None)
+    assert row["trimp"] == 150.0
+    assert row["ctl"] is not None
+    assert row["atl"] is not None
+    assert row["tsb"] is not None

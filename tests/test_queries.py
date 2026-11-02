@@ -109,7 +109,7 @@ def test_overview_distinguishes_uncovered_from_real_zero(tmp_path):
     assert complete["next_race"]["date"] == "2026-10-10"
 
 
-def test_overview_marks_partial_trimp_day_and_total_unknown(tmp_path):
+def test_overview_marks_partial_trimp_day_and_returns_known_total(tmp_path):
     conn = make_home(tmp_path)
     start = datetime(2026, 10, 2, tzinfo=timezone.utc)
     add_activity(conn, 1, start, trimp=50)
@@ -117,10 +117,10 @@ def test_overview_marks_partial_trimp_day_and_total_unknown(tmp_path):
     conn.close()
     data, coverage = get_overview(tmp_path, "2026-10-01", "2026-10-03",
                                   {"complete": True})
-    assert data["training"]["trimp"] is None
+    assert data["training"]["trimp"] == 50
     assert data["training"]["unknown_trimp_count"] == 1
     day = next(item for item in data["daily"] if item["date"] == "2026-10-02")
-    assert day["trimp"] is None
+    assert day["trimp"] == 50
     assert day["unknown_trimp_count"] == 1
     assert "trimp" in coverage["missing"]
 

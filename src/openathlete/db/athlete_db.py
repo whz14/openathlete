@@ -1050,7 +1050,6 @@ ATL_TAU_DAYS = 7
 
 def _rebuild_daily_load(conn, today=None):
     per_day = {}
-    unknown_per_day = {}
     local_tz = configured_tzinfo(load_config(_database_home(conn)))
     for r in conn.execute(
             "select a.start_ts, a.tz_offset_s, a.trimp from activity a "
@@ -1059,9 +1058,7 @@ def _rebuild_daily_load(conn, today=None):
             "and s.is_canonical = 1)"):
         d = _activity_local_date(conn, r["start_ts"], r["tz_offset_s"], local_tz)
         per_day.setdefault(d, 0.0)
-        if r["trimp"] is None:
-            unknown_per_day[d] = unknown_per_day.get(d, 0) + 1
-        else:
+        if r["trimp"] is not None:
             per_day[d] += r["trimp"]
     conn.execute("delete from daily_load")
     if not per_day:
@@ -1071,22 +1068,15 @@ def _rebuild_daily_load(conn, today=None):
     if last < max(per_day):
         last = max(per_day)
     ctl = atl = 0.0
-    trimp_complete = True
     n = 0
     while day <= last:
-        unknown = unknown_per_day.get(day, 0) > 0
-        t = None if unknown else per_day.get(day, 0.0)
-        if unknown:
-            trimp_complete = False
-        if trimp_complete:
-            ctl += (t - ctl) / CTL_TAU_DAYS
-            atl += (t - atl) / ATL_TAU_DAYS
-            pmc = (round(ctl, 1), round(atl, 1), round(ctl - atl, 1))
-        else:
-            pmc = (None, None, None)
+        t = per_day.get(day, 0.0)
+        ctl += (t - ctl) / CTL_TAU_DAYS
+        atl += (t - atl) / ATL_TAU_DAYS
+        pmc = (round(ctl, 1), round(atl, 1), round(ctl - atl, 1))
         conn.execute(
             "insert into daily_load (date, trimp, ctl, atl, tsb) values (?, ?, ?, ?, ?)",
-            (day.isoformat(), round(t, 1) if t is not None else None) + pmc)
+            (day.isoformat(), round(t, 1)) + pmc)
         n += 1
         day += timedelta(days=1)
     return n
@@ -1095,9 +1085,9 @@ def _rebuild_daily_load(conn, today=None):
 def rebuild_daily_load(conn, today=None):
     """由 canonical activity.trimp 全量重算 PMC（派生缓存，可删可重建）。
 
-    指数均值从 0 起步爬升；覆盖序列内无活动日 trimp=0；任一活动缺 TRIMP 的
-    日期 trimp=NULL，且首个缺负荷日起 PMC 三值均为 NULL。序列延展到配置时区
-    今天。返回写入天数。
+    指数均值从 0 起步爬升；覆盖序列内无活动日 trimp=0。单课次缺 TRIMP 时保留
+    activity.trimp=NULL，但不进入当日合计，也不阻断后续 PMC；查询层通过 unknown
+    计数和 partial/warning 报告排除。序列延展到配置时区今天。返回写入天数。
     """
     n = _rebuild_daily_load(conn, today=today)
     conn.commit()

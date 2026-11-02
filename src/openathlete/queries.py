@@ -371,16 +371,13 @@ def get_overview(home, start, end, sync_coverage=None):
             item = {"date": key, "activity_count": 0, "duration_s": 0.0,
                     "distance_m": 0.0, "trimp": 0.0 if complete else None,
                     "unknown_trimp_count": 0, "ctl": None, "atl": None, "tsb": None}
-        if item["unknown_trimp_count"] or (
-                not complete and key not in trimp_days):
+        if not complete and key not in trimp_days:
             item["trimp"] = None
         daily.append(item)
         day += timedelta(days=1)
     trimp_values = [row["trimp"] for row in rows if row["trimp"] is not None]
     unknown_trimp_count = sum(row["trimp"] is None for row in rows)
-    if unknown_trimp_count:
-        total_trimp = None
-    elif trimp_values:
+    if trimp_values:
         total_trimp = sum(trimp_values)
     else:
         total_trimp = 0.0 if complete else None

@@ -61,6 +61,7 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
 - **athlete.db 与 src 数据层 v0.1**：规范裸 FIT 归档入库、跑/骑结构解析、
   哈希与主平台驱动的确定性 canonical、multisport 段级同一性、完整快照阈值锚点、
   Edwards TRIMP、7 细区间分布、daily_metrics 与 daily_load；rebuild 保留非派生数据。
+  单课次冲突或缺 TRIMP 只排除该课次负荷，PMC 按已知合计持续滚动并返回 partial/warning。
   骑行按有效功率或可配置距离阈值分派结构解析（默认 15km，首次候选需用户确认）。
   高驰 Training Hub adapter、统一 CLI、真实全量归档与 PMC 重算已验证。
   根目录 `athlete_db.py` / `workout_structure.py` 保留为兼容 shim。
@@ -235,6 +236,11 @@ Markdown 记忆）是核心资产，Kimi Code 插件与 OpenClaw 只是渠道。
     默认客户端时抛出 `InvalidURL`。COROS client 在进程内将合法 `[IPv6]` 条目归一为
     裸地址，保留用户代理配置且不修改系统环境；其他解析失败返回 `PROXY_CONFIG_INVALID`，
     检查代理环境后恢复原 `sync_now`，不要删除 sync.db。
+18. **单课次异常不阻断 PMC**：双表无 canonical、游泳等缺锚点导致 TRIMP=NULL、单文件
+    解析失败都只影响对应课次。日负荷按已知 TRIMP 合计并持续滚动；工具返回
+    `coverage.partial` 与 `CANONICAL_CONFLICT` / `TRIMP_PARTIAL` 警告。分析时必须披露
+    排除数量，不得把跳过课次解释为当天没训练；同步覆盖不足仍保持 incomplete/stale，
+    不能用这套降级规则把未同步数据当成真实零负荷。
 
 ## 运行手册（Runbook）
 

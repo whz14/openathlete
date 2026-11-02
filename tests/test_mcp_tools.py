@@ -146,7 +146,7 @@ def test_no_local_data_and_incomplete_coverage_is_an_error(tmp_path, monkeypatch
     assert result.structured_content["error"]["code"] == "COVERAGE_INSUFFICIENT"
 
 
-def test_conflicts_are_not_reported_as_empty_activities(tmp_path):
+def test_conflicts_are_skipped_with_warning_instead_of_blocking_window(tmp_path):
     home = make_home(tmp_path)
     conn = connect(home / "athlete.db")
     init_db(conn)
@@ -159,8 +159,47 @@ def test_conflicts_are_not_reported_as_empty_activities(tmp_path):
     conn.commit()
     conn.close()
     result = call(home, "query_activities", {"start_date": "2026-10-01"})
-    assert result.is_error is True
-    assert result.structured_content["error"]["code"] == "CANONICAL_CONFLICT"
+    assert result.is_error is False
+    assert result.structured_content["data"]["activities"] == []
+    coverage = result.structured_content["meta"]["coverage"]
+    assert coverage["partial"] is True
+    assert coverage["excluded_conflict_count"] == 1
+    warning = result.structured_content["meta"]["warnings"][0]
+    assert warning["code"] == "CANONICAL_CONFLICT"
+    assert warning["count"] == 1 and warning["message"]
+
+
+def test_normal_run_and_unknown_swim_return_partial_but_usable_pmc(tmp_path):
+    from datetime import date
+
+    from openathlete.db.athlete_db import rebuild_daily_load
+
+    home = make_home(tmp_path)
+    add_activity(home)
+    conn = connect(home / "athlete.db")
+    conn.execute("update activity set trimp=50 where id=1")
+    start = int(datetime(2026, 10, 3, tzinfo=timezone.utc).timestamp())
+    conn.execute("insert into activity (id,start_ts,tz_offset_s,sport,duration_s,distance_m) "
+                 "values (2,?,0,'swim',1800,1000)", (start,))
+    conn.execute("insert into activity_source (activity_id,platform,platform_activity_id,"
+                 "fit_path,fit_sha256,is_canonical) values (2,'garmin','g2','x',?,1)",
+                 ("c" * 64,))
+    rebuild_daily_load(conn, today=date(2026, 10, 4))
+    conn.close()
+
+    result = call(home, "get_training_load", {"days": 7, "end_date": "2026-10-04"})
+    assert result.is_error is False
+    data = result.structured_content["data"]
+    assert data["latest"]["date"] == "2026-10-04"
+    assert data["latest"]["ctl"] is not None
+    swim_day = next(row for row in data["daily"] if row["date"] == "2026-10-03")
+    assert swim_day["trimp"] == 0 and swim_day["ctl"] is not None
+    coverage = result.structured_content["meta"]["coverage"]
+    assert coverage["partial"] is True
+    assert coverage["unknown_trimp_count"] == 1
+    assert coverage["pmc_initialized"] is False
+    warning = result.structured_content["meta"]["warnings"][0]
+    assert warning["code"] == "TRIMP_PARTIAL" and warning["count"] == 1
 
 
 def test_pmc_initialized_requires_anchors_and_valid_series(tmp_path):
